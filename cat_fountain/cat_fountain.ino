@@ -3,23 +3,22 @@
 
 #define ECHO_PIN     2
 #define TRIGGER_PIN  3
-#define PUMP_PIN     7
-#define MAX_DISTANCE 200
+#define PUMP_PIN     11
+#define MIN_DISTANCE 25.0
+#define FLAG_PIN LED_BUILTIN
 
-const unsigned long TIME_TO_DRINK =       3000;  // miliseconds
-const unsigned long TIME_BETWEEN_CHECKS = 1000; // miliseconds
+const unsigned long TIME_TO_DRINK =       1000;
+//const unsigned long TIME_BETWEEN_CHECKS = 500;
+const unsigned long TIME_BETWEEN_CHECKS = SLEEP_500MS;
 
-void toggle_pump_state(bool on) {
-  if(on) {
-    Serial.println("Pump turning on");
-    analogWrite(PUMP_PIN, 140);
-//    digitalWrite(PUMP_PIN, HIGH);
-  } else {
-    Serial.println("Pump turning off");
+void toggle_pump_state(float distance) {
+  if(distance == 0.0) {
     analogWrite(PUMP_PIN, 0);
-//    digitalWrite(PUMP_PIN, LOW);
+  } else {
+    float factor = (MIN_DISTANCE - distance) / MIN_DISTANCE;
+    int level = 195 + (int)45 * factor;
+    analogWrite(PUMP_PIN, level);
   }
-//  digitalWrite(PUMP_PIN, on ? HIGH : LOW);
 }
 
 float get_distance() {
@@ -33,12 +32,12 @@ float get_distance() {
   return duration * 0.034 / 2;
 }
 
-bool cat_is_around() {
-  float distance = get_distance();
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.print(" => ");
-  return distance > 0.0 && distance < 30.0;
+bool cat_is_around(float distance) {
+  return distance < MIN_DISTANCE && distance > 0.0;
+}
+
+void set_flag(float distance) {
+  digitalWrite(FLAG_PIN, cat_is_around(distance) ? HIGH : LOW);
 }
 
 void setup() {
@@ -47,27 +46,34 @@ void setup() {
   pinMode(ECHO_PIN, INPUT);
   // Pump
   pinMode(PUMP_PIN, OUTPUT);
-  Serial.begin(9600);
+//  Serial.begin(9600);
 }
 
 void sleep_while_waiting_for_cat() {
+  LowPower.powerDown(TIME_BETWEEN_CHECKS, ADC_OFF, BOD_OFF);
 //  delay(TIME_BETWEEN_CHECKS);
-  LowPower.idle(SLEEP_4S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
 }
 
-void sleep_while_water_flowing() {
-//  delay(TIME_TO_DRINK);
-  LowPower.idle(SLEEP_2S, ADC_OFF, TIMER2_OFF, TIMER1_OFF, TIMER0_OFF, SPI_OFF, USART0_OFF, TWI_OFF);
+void sleep_while_water_flowing(int factor = 1) {
+//  LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
+  delay(TIME_TO_DRINK * factor);
 }
 
 void loop() {
-  if(cat_is_around()) {
-    Serial.println("Cat IS AROUND and pump will be turned on");
-    toggle_pump_state(true);
-    sleep_while_water_flowing();
-  } else {
-    Serial.println("Cat IS NOT AROUND: Waiting for cat");
-    toggle_pump_state(false);
+  float distance = get_distance();
+//  Serial.print("Distance: ");
+//  Serial.println(distance);
+
+  if(digitalRead(FLAG_PIN) == HIGH) {
+    if(cat_is_around(distance)) {
+      toggle_pump_state(distance);
+    } else {
+      sleep_while_water_flowing(3);
+      toggle_pump_state(0.0);
+    }
+  } else if(!cat_is_around(distance)) {
     sleep_while_waiting_for_cat();
   }
+
+  set_flag(distance);
 }
