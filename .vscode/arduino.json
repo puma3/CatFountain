@@ -1,0 +1,7 @@
+{
+    "board": "arduino:avr:nano",
+    "configuration": "cpu=atmega328old",
+    "programmer": "AVRISP mkII",
+    "sketch": "cat_fountain\\cat_fountain.ino",
+    "port": "COM3"
+}
